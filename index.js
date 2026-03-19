@@ -22,6 +22,7 @@ const LANGUAGE_IDS = {
   ruby: 72
 }
 
+// Code execution route
 app.post('/api/execute', async (req, res) => {
   const { language, code, testCases } = req.body
 
@@ -66,6 +67,76 @@ app.post('/api/execute', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: 'Execution failed',
+      details: error.message
+    })
+  }
+})
+
+// AI assistant route using Puter
+app.post('/api/ai', async (req, res) => {
+  const { mode, problem, code, language } = req.body
+
+  const prompts = {
+    explain: `You are a helpful coding assistant. Explain this coding problem clearly and simply for a student:
+
+Problem: ${problem}
+
+Give a clear explanation of what the problem is asking. Do not give the solution.`,
+
+    hint: `You are a helpful coding assistant. Give a small helpful hint for this problem without revealing the full solution:
+
+Problem: ${problem}
+Student's current code in ${language}:
+${code}
+
+Give only 1-2 sentences as a hint. Do not give the full solution.`,
+
+    review: `You are a helpful coding assistant. Review this code and suggest improvements:
+
+Problem: ${problem}
+Code in ${language}:
+${code}
+
+Give specific feedback on code quality, efficiency, and any improvements.`,
+
+    debug: `You are a helpful coding assistant. Help debug this code:
+
+Problem: ${problem}
+Code in ${language}:
+${code}
+
+Identify the bugs and explain what's wrong. Give hints to fix them but don't rewrite the full solution.`
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.puter.com/drivers/call',
+      {
+        interface: 'puter-chat-completion',
+        driver: 'claude-sonnet-4-5',
+        method: 'complete',
+        args: {
+          messages: [
+            {
+              role: 'user',
+              content: prompts[mode] || prompts.explain
+            }
+          ]
+        }
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    const message = response.data?.result?.message?.content?.[0]?.text || 'No response'
+    res.json({ response: message })
+
+  } catch (error) {
+    res.status(500).json({
+      error: 'AI request failed',
       details: error.message
     })
   }
