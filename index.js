@@ -96,16 +96,29 @@ Respond ONLY in this exact JSON format with no extra text:
           messages: [{ role: 'user', content: prompt }]
         }
       },
-      { headers: { 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer anonymous'
+        }
+      }
     )
 
+    console.log('Puter response:', JSON.stringify(response.data))
+
     const message = response.data?.result?.message?.content?.[0]?.text || ''
+    console.log('AI message:', message)
+
     const clean = message.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
     res.json(parsed)
 
   } catch (error) {
-    res.status(500).json({ error: 'AI request failed', details: error.message })
+    console.log('AI Error:', error.response?.data || error.message)
+    res.status(500).json({
+      error: 'AI request failed',
+      details: error.response?.data || error.message
+    })
   }
 })
 
