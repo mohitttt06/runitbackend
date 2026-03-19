@@ -25,7 +25,6 @@ const LANGUAGE_IDS = {
 // Code execution route
 app.post('/api/execute', async (req, res) => {
   const { language, code, testCases } = req.body
-
   try {
     const results = await Promise.all(
       testCases.map(async (testCase) => {
@@ -36,14 +35,10 @@ app.post('/api/execute', async (req, res) => {
             language_id: LANGUAGE_IDS[language] || 71,
             stdin: testCase.input
           },
-          {
-            headers: { 'Content-Type': 'application/json' }
-          }
+          { headers: { 'Content-Type': 'application/json' } }
         )
-
         const output = submitRes.data.stdout?.trim() || ''
         const expected = testCase.expectedOutput?.trim() || ''
-
         return {
           input: testCase.input,
           expectedOutput: expected,
@@ -54,7 +49,6 @@ app.post('/api/execute', async (req, res) => {
         }
       })
     )
-
     res.json({
       results,
       summary: {
@@ -63,50 +57,33 @@ app.post('/api/execute', async (req, res) => {
         failed: results.filter(r => !r.passed).length
       }
     })
-
   } catch (error) {
-    res.status(500).json({
-      error: 'Execution failed',
-      details: error.message
-    })
+    res.status(500).json({ error: 'Execution failed', details: error.message })
   }
 })
 
-// AI assistant route using Puter
+// AI test case generation route
 app.post('/api/ai', async (req, res) => {
-  const { mode, problem, code, language } = req.body
+  const { problem, code, count } = req.body
 
-  const prompts = {
-    explain: `You are a helpful coding assistant. Explain this coding problem clearly and simply for a student:
+  const prompt = `You are a competitive programming assistant.
 
-Problem: ${problem}
+${problem ? `Problem Statement:\n${problem}` : ''}
+${code ? `User's Code:\n${code}` : ''}
 
-Give a clear explanation of what the problem is asking. Do not give the solution.`,
+Generate exactly ${count || 5} diverse test cases for this problem.
+Include simple cases, edge cases, and corner cases.
 
-    hint: `You are a helpful coding assistant. Give a small helpful hint for this problem without revealing the full solution:
-
-Problem: ${problem}
-Student's current code in ${language}:
-${code}
-
-Give only 1-2 sentences as a hint. Do not give the full solution.`,
-
-    review: `You are a helpful coding assistant. Review this code and suggest improvements:
-
-Problem: ${problem}
-Code in ${language}:
-${code}
-
-Give specific feedback on code quality, efficiency, and any improvements.`,
-
-    debug: `You are a helpful coding assistant. Help debug this code:
-
-Problem: ${problem}
-Code in ${language}:
-${code}
-
-Identify the bugs and explain what's wrong. Give hints to fix them but don't rewrite the full solution.`
-  }
+Respond ONLY in this exact JSON format with no extra text:
+{
+  "testCases": [
+    {
+      "input": "exact input here",
+      "expectedOutput": "exact expected output here",
+      "description": "what this case tests"
+    }
+  ]
+}`
 
   try {
     const response = await axios.post(
@@ -116,29 +93,19 @@ Identify the bugs and explain what's wrong. Give hints to fix them but don't rew
         driver: 'claude-sonnet-4-5',
         method: 'complete',
         args: {
-          messages: [
-            {
-              role: 'user',
-              content: prompts[mode] || prompts.explain
-            }
-          ]
+          messages: [{ role: 'user', content: prompt }]
         }
       },
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers: { 'Content-Type': 'application/json' } }
     )
 
-    const message = response.data?.result?.message?.content?.[0]?.text || 'No response'
-    res.json({ response: message })
+    const message = response.data?.result?.message?.content?.[0]?.text || ''
+    const clean = message.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    res.json(parsed)
 
   } catch (error) {
-    res.status(500).json({
-      error: 'AI request failed',
-      details: error.message
-    })
+    res.status(500).json({ error: 'AI request failed', details: error.message })
   }
 })
 
